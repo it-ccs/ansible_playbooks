@@ -1,0 +1,73 @@
+---
+- import_playbook: "install-win-pwsh.yml"
+  tags: ["installpwsh"]
+
+- import_playbook: "install-win-ssh.yml"
+  tags: ["installsshd"]
+
+- name: "Configure Powershell Core as default shell for OpenSSH"
+  vars:
+    ansible_connection: "winrm"
+    ansible_winrm_transport: "credssp"
+    ansible_winrm_scheme: "http"
+    ansible_winrm_port: 5985
+    ansible_port: 5985
+    host: "winservers:!win2016sds"
+
+  collections:
+    - "community.windows"
+
+  tags: ["setupsshd"]
+
+  hosts: "{{ host }}"
+
+  handlers:
+    - name: "restart sshd"
+      ansible.windows.win_service:
+        name: "sshd"
+        state: "restarted"
+
+  tasks:
+    - name: "Get powershell core exe 8.3 short path"
+      ansible.windows.win_powershell:
+        arguments: ["-ExecutionPolicy", "UnRestricted", "-NonInteractive", "-NoLogo"]
+        error_action: "stop"
+        script: |
+          $pwshlinkPath = (Get-ChildItem -Path "$env:SystemDrive\ProgramData\Microsoft\Windows\Start Menu\Programs" -Filter Powershell*.lnk -Recurse | Where-Object {$_.Name -notmatch 'Windows'} |Sort-Object -Property LastWriteTime -Descending | Select-Object -First 1).FullName;
+          $pwshExeLong = (New-Object -ComObject WScript.Shell).CreateShortcut($pwshlinkPath).TargetPath;
+          $pwshExeShort = (New-Object -ComObject Scripting.FileSystemObject).GetFile($pwshExeLong).ShortPath;
+          $pwshExeLong;
+          $pwshExeShort;
+      register: pwsh_get_exe_path
+      changed_when: false
+
+    - ansible.builtin.debug:
+        var: pwsh_get_exe_path
+
+    - ansible.builtin.set_fact:
+        pwsh_exe_long_path: "{{ (pwsh_get_exe_path.output|default(['one']))[0] }}"
+        pwsh_exe_short_path: "{{ (pwsh_get_exe_path.output|default(['one','two']))[1] }}"
+      failed_when: pwsh_get_exe_path.output|length < 2
+
+    - ansible.builtin.debug:
+        msg: "pwsh_exe_long_path= '{{ pwsh_exe_long_path }}', pwsh_exe_short_path '{{ pwsh_exe_short_path }}'"
+
+    - name: "Add PowerShell subsystem support to OpenSSH Server"
+      community.windows.win_lineinfile:
+        insertafter: "[Ss]ubsystem[ \t]+sftp"
+        line: "Subsystem\tpowershell\t{{ pwsh_exe_short_path }} -sshs"
+        path: "{{ ansible_facts.env.ProgramData }}\\ssh\\sshd_config"
+        regex: "Subsystem.*powershell"
+        state: "present"
+      notify: ["restart sshd"]
+
+    - name: "Set PowerShell default shell"
+      ansible.windows.win_regedit:
+        data: "{{ item.data }}"
+        name: "{{ item.name }}"
+        path: "HKLM:\\SOFTWARE\\OpenSSH"
+        type: "string"
+      loop:
+        - {data: "{{ pwsh_exe_long_path }}", name: "DefaultShell"}
+        - {data: "/c", name: "DefaultShellCommandOption"}
+      notify: ["restart sshd"]

@@ -1,0 +1,13 @@
+---
+- name: "Install and Configure APCUPSd"
+
+  vars_files:
+    - "vars/ups_vars.yml"
+
+  vars:
+    host: "xen_servers"
+
+  hosts: "{{ host }}"
+
+  roles:
+    - role: "apcupsd-lin"

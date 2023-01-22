@@ -1,0 +1,11 @@
+htdocs_path: "/var/www/{{ certbot_domain }}"
+
+certbot_domain: "{{ lookup('env', 'CERTBOT_DOMAIN') }}"
+
+certbot_token: "{{ lookup('env', 'CERTBOT_TOKEN') }}"
+
+certbot_validation: "{{ lookup('env', 'CERTBOT_VALIDATION') }}"
+
+certbot_token_dir: "{{ htdocs_path }}/.well-known/acme-challenge"
+
+certbot_token_path: "{{ certbot_token_dir }}/{{ certbot_token }}"

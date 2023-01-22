@@ -1,0 +1,304 @@
+pf_dns_servers: "8.8.4.4 8.8.8.8"
+pf_dns_override: false
+pf_domain: "centennialchristian.ca"
+pf_time_servers: "10.100.3.1"
+pf_fixed_menu: true
+wan_mac: "0c:c4:7a:32:4a:c4"
+int_wan: "hn0"
+int_oobm: "hn1"
+int_opt1: "hn2"
+int_opt2: "hn3"
+vlan_interfaces:
+  - name: "edu"
+    phys_int: "{{int_lan.phys_int}}"
+    vlan_num: 2
+    ip_addr: "10.100.3.253"
+    prefix_len: 23
+  # - vint_dmz:
+  - name: "dmz"
+    phys_int: "{{int_lan.phys_int}}"
+    vlan_num: 51
+    ip_addr: "10.100.51.253"
+    prefix_len: 24
+  # - vint_display:
+  - name: "display"
+    phys_int: "{{int_lan.phys_int}}"
+    vlan_num: 12
+    ip_addr: "10.100.12.253"
+    prefix_len: 24
+  # - vint_employee:
+  - name: "employee"
+    phys_int: "{{int_lan.phys_int}}"
+    vlan_num: 6
+    ip_addr: "10.100.7.253"
+    prefix_len: 23
+  # - vint_guest:
+  - name: "guest"
+    phys_int: "{{int_lan.phys_int}}"
+    vlan_num: 23
+    ip_addr: "10.100.23.253"
+    prefix_len: 24
+  # - vint_phones:
+  - name: "phones"
+    phys_int: "{{int_lan.phys_int}}"
+    vlan_num: 20
+    ip_addr: "10.100.20.253"
+    prefix_len: 24
+  # - vint_printers:
+  - name: "printers"
+    phys_int: "{{int_lan.phys_int}}"
+    vlan_num: 9
+    ip_addr: "10.100.9.253"
+    prefix_len: 24
+  # - vint_student:
+  - name: "student"
+    phys_int: "{{int_lan.phys_int}}"
+    vlan_num: 4
+    ip_addr: "10.100.5.253"
+    prefix_len: 23
+  # - vint_studentipads:
+  - name: "studentipads"
+    phys_int: "{{int_lan.phys_int}}"
+    vlan_num: 8
+    ip_addr: "10.100.8.253"
+    prefix_len: 24
+pf_host_aliases:
+  - name: "AD"
+    address: "10.100.3.1"
+  - name: "Automator"
+    address: "10.100.3.8"
+  - name: "DC"
+    address: "10.100.3.4"
+  - name: "PBX"
+    address: "10.100.20.250"
+  - name: "PacketFence"
+    address: "10.100.3.19"
+  - name: "RProxy"
+    address: "10.100.51.1"
+pf_net_aliases:
+  - name: "Erics_Home_net"
+    address: "10.0.0.0/16"
+  - name: "Private_Networks"
+    address: "10.0.0.0/8 172.16.0.0/20 192.168.0.0/16"
+    update_int:
+pf_url_aliases:
+  - name: "GeoIP_CA"
+    address: "http://10.100.3.8/pfsense/geoip-CA.cidr"
+    update_int: 7
+pf_port_forward:
+  - descr: "Allow https to rproxy server"
+    destination: "IP:wan:443"
+    protocol: "tcp"
+    source: "any"
+    target: "RProxy:443"
+  - descr: "Allow http to rproxy server"
+    destination: "IP:wan:80"
+    protocol: "tcp"
+    source: "any"
+    target: "RProxy:80"
+pf_rules:
+  - name: "Site-to-Site VPN Allow IPSec"
+    int: "wan"
+    action: "pass"
+    direction: "in"
+    after:
+    before: "bottom"
+    dest: "(self)"
+    dst_port: 4500
+    src: "GeoIP_CA"
+    ip_protocol: "inet"
+    protocol: "udp"
+    log: false
+  - name: "Site-to-Site VPN Allow Key"
+    int: "wan"
+    action: "pass"
+    direction: "in"
+    after:
+    before: "bottom"
+    dest: "(self)"
+    dst_port: 500
+    src: "GeoIP_CA"
+    ip_protocol: "inet"
+    protocol: "udp"
+    log: false
+  - name: "Allow DNS requests to this firewall"
+    int: "dmz"
+    action: "pass"
+    direction: "in"
+    after:
+    before: "bottom"
+    dest: "(self)"
+    dst_port: 53
+    src: "any"
+    ip_protocol: "inet"
+    protocol: "udp"
+    log: false
+  - name: "Deny DNS to internet"
+    int: "dmz"
+    action: "block"
+    direction: "in"
+    after:
+    before: "bottom"
+    dest: "any"
+    dst_port: 53
+    src: "any"
+    ip_protocol: "inet"
+    protocol: "udp"
+    log: false
+  - name: "Block access to CCS lan"
+    int: "dmz"
+    action: "block"
+    direction: "in"
+    after:
+    before: "bottom"
+    dest: "Private_Networks"
+    dst_port:
+    src: "any"
+    ip_protocol: "inet46"
+    protocol: "any"
+    log: false
+  - name: "Default allow out (for Internet access)"
+    int: "dmz"
+    action: "pass"
+    direction: "in"
+    after:
+    before: "bottom"
+    dest: "any"
+    dst_port:
+    src: "any"
+    ip_protocol: "inet46"
+    protocol: "any"
+    log: false
+  - name: "Default allow out"
+    int: "display"
+    action: "pass"
+    direction: "in"
+    after:
+    before: "bottom"
+    dest: "any"
+    dst_port:
+    src: "any"
+    ip_protocol: "inet46"
+    protocol: "any"
+    log: false
+  - name: "Default allow all"
+    int: "employee"
+    action: "pass"
+    direction: "in"
+    after:
+    before: "bottom"
+    dest: "any"
+    dst_port:
+    src: "any"
+    ip_protocol: "inet46"
+    protocol: "any"
+    log: false
+  - name: "Allow DNS (udp) requests to firewall"
+    int: "guest"
+    action: "pass"
+    direction: "in"
+    after:
+    before: "bottom"
+    dest: "(self)"
+    dst_port: 53
+    src: "any"
+    ip_protocol: "inet"
+    protocol: "udp"
+    log: false
+  - name: "Allow DNS (tcp) requests to firewall"
+    int: "guest"
+    action: "pass"
+    direction: "in"
+    after:
+    before: "bottom"
+    dest: "(self)"
+    dst_port: 53
+    src: "any"
+    ip_protocol: "inet46"
+    protocol: "tcp"
+    log: false
+  - name: "Allow DNS (tls) requests"
+    int: "guest"
+    action: "pass"
+    direction: "in"
+    after:
+    before: "bottom"
+    dest: "(self)"
+    dst_port: 843
+    src: "any"
+    ip_protocol: "inet"
+    protocol: "tcp"
+    log: false
+  - name: "Block other DNS (udp) requests"
+    int: "guest"
+    action: "block"
+    direction: "in"
+    after:
+    before: "bottom"
+    dest: "any"
+    dst_port: 53
+    src: "any"
+    ip_protocol: "inet"
+    protocol: "udp"
+    log: false
+  - name: "Block other DNS (tcp) requests"
+    int: "guest"
+    action: "block"
+    direction: "in"
+    after:
+    before: "bottom"
+    dest: "any"
+    dst_port: 53
+    src: "any"
+    ip_protocol: "inet46"
+    protocol: "tcp"
+    log: false
+  - name: "Block other DNS (tls) requests"
+    int: "guest"
+    action: "block"
+    direction: "in"
+    after:
+    before: "bottom"
+    dest: "any"
+    dst_port: 853
+    src: "any"
+    ip_protocol: "inet"
+    protocol: "tcp"
+    log: false
+  - name: "Deny access to private networks"
+    int: "guest"
+    action: "block"
+    direction: "in"
+    after:
+    before: "bottom"
+    dest: "Private_Networks"
+    dst_port:
+    src: "any"
+    ip_protocol: "inet"
+    protocol: "any"
+    log: false
+  - name: "Default allow to the internet"
+    int: "guest"
+    action: "pass"
+    direction: "in"
+    after:
+    before: "bottom"
+    dest: "any"
+    dst_port:
+    src: "any"
+    ip_protocol: "inet46"
+    protocol: "any"
+    log: false
+  - name: "Allow management everywhere"
+    int: "management"
+    action: "pass"
+    direction: "in"
+    after:
+    before: "bottom"
+    dest: "any"
+    dst_port:
+    src: "any"
+    ip_protocol: "inet46"
+    protocol: "any"
+    log: false
+

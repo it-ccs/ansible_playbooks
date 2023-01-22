@@ -1,0 +1,91 @@
+- name: "Copy scripts"
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/scripts/{{ item|basename }}"
+    owner: "root"
+    group: "wheel"
+    mode: 0755
+  loop: [ "{{ get_users_dir_to_user_scripts }}" ]
+
+- name: "Set 'everyone' access to none on all datasets"
+  ansible.builtin.shell:
+    cmd: "setfacl -R -m everyone@::allow /mnt/{{ zfs_pool.name }}/{{ item.name }}"
+  loop: "{{ zfs_datasets }}"
+
+- name: "Remove everyone access from all sub files and directories in datasets"
+  ansible.builtin.shell:
+    cmd: "setfacl -R -x everyone@::allow /mnt/{{ zfs_pool.name }}/{{ item.name }}"
+  loop: "{{ zfs_datasets }}"
+
+- name: "Apply fullcontrol to Domain Admins on all datasets"
+  ansible.builtin.shell:
+    cmd: "setfacl -R -m \"g:{{ ad_netbios_domain }}\\Domain Admins:{{ (nfsv4_acl|selectattr('name','eq','fullcontrol_and_inherit_set')|first).ace }}:allow\" /mnt/{{ zfs_pool.name }}/{{ item.name }}"
+  loop: "{{ zfs_datasets }}"
+
+# - name: "Create groups of read/modify/fullcontrol permissions for each share (except home and profiles)"
+#   community.windows.win_domain_group:
+#     category: "security"
+#     description: "Members of this group have {{ item[1] }} access to {{ item[0].smb_share }} on {{ inventory_hostname|upper }}"
+#     display_name: "{{ inventory_hostname|upper }}_{{ item[0].name }}-Share-{{ item[1] }}"
+#     domain_username: "{{ ad_admin_user }}"
+#     domain_password: "{{ ad_admin_pwd }}"
+#     name: "{{ inventory_hostname|upper }}_{{ item[0].name }}-Share-{{ item[1] }}"
+#     organizational_unit: "{{ acl_group_ou }}"
+#     scope: "universal"
+#     state: "present"
+#   with_nested:
+#     - "{{ zfs_datasets|rejectattr('name','match','^(home|profiles)$') }}"
+#     - [ "fullcontrol", "modify", "read" ]
+#   delegate_to: "{{ ad_domain_controller_host }}"
+
+- name: "Apply permissions for read/modify/fullcontrol groups on datasets (except home and profiles)"
+  ansible.builtin.shell:
+    cmd: "setfacl -R -m \"g:{{ ad_netbios_domain }}\\{{ inventory_hostname|upper }}_{{ item[0].name }}-Share-{{ item[1] }}:{{ (nfsv4_acl|selectattr('name','eq', [item[1],'_and_inherit_set']|join('') )|first).ace }}:allow\" /mnt/{{ zfs_pool.name }}/{{ item[0].name }}"
+  with_nested:
+    - "{{ zfs_datasets|rejectattr('name','match','^(home|profiles)$') }}"
+    - [ "fullcontrol", "modify", "read" ]
+
+- name: "Grant read+create dir permissions for domain users to home and profiles"
+  ansible.builtin.shell:
+    cmd: "setfacl -R -m \"g:{{ ad_netbios_domain }}\\Domain Users:{{ (nfsv4_acl|selectattr('name','eq','read_and_create_dir_no_inherit_set')|first).ace }}:allow\" /mnt/{{ zfs_pool.name }}/{{ item }}"
+  loop: [ "home", "profiles" ]
+
+- name: "Grant read+create dir permissions for domain computers to home and profiles"
+  ansible.builtin.shell:
+    cmd: "setfacl -R -m \"g:{{ ad_netbios_domain }}\\Domain Computers:{{ (nfsv4_acl|selectattr('name','eq','read_and_create_dir_no_inherit_set')|first).ace }}:allow\" /mnt/{{ zfs_pool.name }}/{{ item }}"
+  loop: [ "home", "profiles" ]
+
+# - name: "Get list of user dirs in home and profiles to username"
+#   ansible.builtin.shell:
+#     cmd: "/scripts/{{ get_users_dir_to_user_scripts|basename }}"
+#   environment:
+#     userDirsPath: "{{ item }}"
+#     domain: "{{ ad_netbios_domain }}"
+#     defaultUser: "admin"
+#   register: get_user_dir_to_user_cmd
+#   changed_when: false
+#   loop: [ "/mnt/data/home", "/mnt/data/profiles" ]
+
+# - name: "Convert script output to list"
+#   ansible.builtin.set_fact:
+#     users_dir_to_user_list: "{{ (get_user_dir_to_user_cmd.results[0].stdout|from_json).users_dir_list + (get_user_dir_to_user_cmd.results[1].stdout|from_json).users_dir_list }}"
+
+# - name: "Set ownership if each user dir to appropriate user"
+#   ansible.builtin.file:
+#     mode: 0700
+#     owner: "{{ ad_netbios_domain }}\\{{ item.username }}"
+#     path: "{{ item.path }}"
+#     recurse: true
+#     state: "directory"
+#   loop: "{{ users_dir_to_user_list }}"
+
+# - name: "Grant fullcontrol to each user dir for the appropriate user"
+#   ansible.posix.acl:
+#     entity: "{{ ad_netbios_domain }}\\{{ item.username }}"
+#     etype: "user"
+#     path: "{{ item.path }}"
+#     permissions: "{{ (nfsv4_acl|selectattr('name','eq','fullcontrol_and_inherit_set')|first).ace }}"
+#     recursive: true
+#     state: "present"
+#     use_nfsv4_acls: true
+#   loop: "{{ users_dir_to_user_list }}"

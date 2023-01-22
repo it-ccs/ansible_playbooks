@@ -1,0 +1,48 @@
+---
+- name: "Install OpenSSH Server on Windows"
+  vars:
+    # ansible_connection: "winrm"
+    # ansible_winrm_transport: "{{ ansible_winrm_transport|default('credssp') }}"
+    # ansible_winrm_scheme: "{{ ansible_winrm_scheme|default('http') }}"
+    # ansible_winrm_port: "{{ ansible_winrm_port|default(5985) }}"
+    # ansible_port: "{{ ansible_port|default(5985) }}"
+    ansible_connection: "winrm"
+    ansible_winrm_transport: "credssp"
+    ansible_winrm_scheme: "http"
+    ansible_winrm_port: 5985
+    ansible_port: 5985
+
+  hosts: "{{ host }}"
+
+  tasks:
+    - name: "Install OpenSSH Server Windows Capability"
+      ansible.windows.win_powershell:
+        arguments: [ "-ExecutionPolicy","UnRestricted","-NonInteractive","-NoLogo" ]
+        error_action: "stop"
+        script: |
+          $opensshserver = Get-WindowsCapability -Online -Name 'OpenSSH.Server*' | Sort-Object -Property Name -Descending | Select-Object -First 1;
+          if (-not $opensshserver ) {
+            throw "OpenSSH.Server capability not available on this server";
+          }
+          if ( $opensshserver.State -ne 'Installed') {
+            Add-WindowsCapability -Online -Name $opensshserver.Name
+            Write-Output "Installed OpenSSH Server";
+          } else {
+            Write-Output "Already installed."
+          }
+      register: add_ssh_server
+      changed_when: (['none'] + add_ssh_server.output)|last is match('Installed OpenSSH Server')
+      become: true
+      become_user: "SYSTEM"
+      become_method: "runas"
+
+    - name: "Set SSH server services to startup automatically"
+      ansible.windows.win_service:
+        name: "{{ item }}"
+        start_mode: "auto"
+        state: "started"
+      loop:
+        - "sshd"
+        - "ssh-agent"
+
+    

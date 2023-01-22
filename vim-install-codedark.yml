@@ -1,0 +1,15 @@
+---
+- name: vIM Code Dark Theme
+  
+  vars_files:
+    - "vars/vim.yaml"
+
+  vars:
+    host: "localhost"
+
+  hosts: "{{ host }}"
+  
+  gather_facts: yes
+
+  tasks:
+    - ansible.builtin.import_tasks: "tasks/vim-install-codedark_tasks.yml"

@@ -1,0 +1,22 @@
+---
+- name: "Certbot HTTP Auth Hook for rproxy"
+  vars_files:
+    - "vars/certbot_vars.yml"
+
+  vars:
+    host: "rproxy:helpdesk"
+
+  hosts: "{{ host }}"
+
+  tasks:
+    - name: "Create certbot token directory"
+      ansible.builtin.file:
+        mode: 0755
+        path: "{{ certbot_token_dir }}"
+        state: "directory"
+
+    - name: "Create certbot token file for HTTP auth"
+      ansible.builtin.copy:
+        content: "{{ certbot_validation }}"
+        dest: "{{ certbot_token_path }}"
+        mode: 0644

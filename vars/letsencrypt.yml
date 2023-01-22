@@ -1,0 +1,42 @@
+letsencrypt_dirs:
+# cert_domain must be specified in playbook vars
+  livedir: "/etc/letsencrypt/live/{{ cert_domain }}"
+  customdir: "/home/letsencrypt/live/{{ cert_domain }}"
+# files letsencrypt already created
+certPEM:
+  name: "cert.pem"
+  path: "{{ letsencrypt_dirs.livedir }}/cert.pem"
+privkeyPEM:
+  name: "privkey.pem"
+  path: "{{ letsencrypt_dirs.livedir }}/privkey.pem"
+chainPEM:
+  name: "chain.pem"
+  path: "{{ letsencrypt_dirs.livedir }}/chain.pem"
+fullchainPEM:
+  name: "fullchain.pem"
+  path: "{{ letsencrypt_dirs.livedir }}/fullchain.pem"
+# additional custom files
+caPEM:
+  name: "ca.pem"
+  path: "{{ letsencrypt_dirs.customdir }}/ca.pem"
+chainDER:
+  name: "chain.der"
+  path: "{{ letsencrypt_dirs.customdir }}/chain.der"
+fullchain_andkeyPEM:
+  name: "fullchain_andkey.pem"
+  path: "{{ letsencrypt_dirs.customdir }}/fullchain_andkey.pem"
+fullchain_ca_andkeyKDB:
+  name: "fullchain_ca_andkey.kdb"
+  path: "{{ letsencrypt_dirs.customdir }}/fullchain_ca_andkey.kdb"
+fullchain_ca_andkeyPEM:
+  name: "fullchain_ca_andkey.pem"
+  path: "{{ letsencrypt_dirs.customdir }}/fullchain_ca_andkey.pem"
+fullchain_ca_andkeyPFX:
+  name: "fullchain_ca_andkey.pfx"
+  path: "{{ letsencrypt_dirs.customdir }}/fullchain_ca_andkey.pfx"
+privkeyPVK:
+  name: "privkey.pvk"
+  path: "{{ letsencrypt_dirs.customdir }}/privkey.pvk"
+unifiKDB:
+  name: "unifi_keystore.kdb"
+  path: "{{ letsencrypt_dirs.customdir }}/unifi_keystore.kdb"

@@ -1,0 +1,62 @@
+---
+- name: "Fix Win Remote Management service"
+  vars:
+    winrm_credssp_enable: |
+      Enable-WSManCredSSP -Role Server -Force
+      Enable-WSManCredSSP -Role Client -DelegateComputer * -Force
+      New-Item -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation\'
+      New-Item -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation\AllowFreshCredentials\'
+      New-Item -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation\AllowFreshCredentialsWhenNTLMOnly\'
+      Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation\AllowFreshCredentials' -Name 1 -Value 'wsman/*'
+      Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation\AllowFreshCredentials' -Name 2 -Value 'winrm/*';
+      Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation\AllowFreshCredentialsWhenNTLMOnly' -Name 1 -Value 'wsman/*'
+      Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation\AllowFreshCredentialsWhenNTLMOnly' -Name 2 -Value 'winrm/*';
+      Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation\AllowFreshCredentials' -Name HyperVMig -Value 'Microsoft Virtual System Migration Service/*'
+      Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CredentialsDelegation\AllowFreshCredentialsWhenNTLMOnly' -Name HyperVMig -Value 'Microsoft Virtual System Migration Service/*'
+  collections:
+    - "community.windows"
+
+  gather_facts: false
+
+  hosts: "{{ host }}"
+
+  tasks:
+    - delegate_to: "localhost"
+      block:
+        - name: "Enable WinRM"
+          community.windows.psexec:
+            arguments: |
+              quickconfig -transport:http -force -quiet
+            executable: "C:\\Windows\\System32\\winrm.cmd"
+            connection_password: "{{ ansible_password }}"
+            connection_username: "{{ ansible_user }}"
+            hostname: "{{ ansible_host }}"
+
+        - name: "Remove SSL certificate thumbprint"
+          community.windows.psexec:
+            arguments: |
+              -ExecutionPolicy UnRestricted -NoLogo -NoProfile -NonInteractive -Command "Get-ChildItem -Path WSMan:\localhost\Listener\ | ? { $_.Keys -contains 'Transport=HTTPS' } | Remove-Item -Confirm:$false -Force -Recurse; Set-Item -Path WSMan:\localhost\Service\CertificateThumbprint -Value ''"
+            executable: "powershell.exe"
+            connection_password: "{{ ansible_password }}"
+            connection_username: "{{ ansible_user }}"
+            hostname: "{{ ansible_host }}"
+
+        - name: "Enable WSMan CredSSP"
+          community.windows.psexec:
+            arguments: |
+              -ExecutionPolicy UnRestricted -NoLogo -NoProfile -NonInteractive -Command "{{ x_enable_credssp }}"
+            executable: "powershell.exe"
+            connection_password: "{{ ansible_password }}"
+            connection_username: "{{ ansible_user }}"
+            hostname: "{{ ansible_host }}"
+          vars:
+            x_enable_credssp: "{{ winrm_credssp_enable|regex_replace('\n','; ') }}"
+
+        - name: "Restart WinRM Service"
+          community.windows.psexec:
+            arguments: |
+              -ExecutionPolicy UnRestricted -NoLogo -NoProfile -NonInteractive -Command "Restart-Service -Name winrm -Force"
+            executable: "powershell.exe"
+            connection_password: "{{ ansible_password }}"
+            connection_username: "{{ ansible_user }}"
+            hostname: "{{ ansible_host }}"

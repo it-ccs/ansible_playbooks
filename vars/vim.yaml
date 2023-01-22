@@ -1,0 +1,7 @@
+vim_sys_rc: "{{ '/etc/vim/vimrc' if (ansible_distribution_file_variety is search('Debian')) else '/usr/local/etc/vim/vimrc' if (ansible_os_family is match('.*BSD')) else '/etc/vimrc' }}"
+
+vim_files_sys_dir: "{{ '/usr/local/share/vim/vimfiles' if (ansible_os_family is match('.*BSD')) else '/usr/share/vim/vimfiles' }}"
+
+ansiblesyntax_src_path: "files/vim/plugins/ansible-vim"
+
+codedark_src_path: "files/plugins/vim/vim-code-dark"

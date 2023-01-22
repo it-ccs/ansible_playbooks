@@ -1,0 +1,21 @@
+---
+- name: "Apply Permissions To TrueNAS datasets"
+  vars_files:
+    - "vars/truenas-fileserver_vars.yml"
+
+  vars:
+    host: "truenas"
+  
+  # vars_prompt:
+  #   - name: "ad_admin_pwd"
+  #     prompt: "Password for {{ join_ad_netbios_domain }}\\{{ ad_admin_user }}"
+  #     private: true
+  
+  collections:
+    - "ansible.posix"
+    - "community.windows"
+  
+  hosts: "{{ host }}"
+
+  tasks:
+    - ansible.builtin.import_tasks: "tasks/truenas-fileserver-permissions_tasks.yml"

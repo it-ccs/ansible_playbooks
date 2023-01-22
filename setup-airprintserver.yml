@@ -1,0 +1,79 @@
+---
+- name: "Setup CUPS and airPrint sharing"
+  vars:
+    host: "ccsprnt"
+    scripts_dir: "/scripts"
+    add_printer_script_src: "files/scripts/ansible_add-cups-printer.sh"
+    add_printer_script_dest: "{{ scripts_dir }}/ansible_add-cups-printer.sh"
+    print_sharing_script_src: "files/scripts/ansible_enable-cups-sharing.sh"
+    print_sharing_script_dest: "{{ scripts_dir }}/ansible_enable-cups-sharing.sh"
+    allow_remote_print_script_src: "files/scripts/ansible_enable-cups-remote.sh"
+    allow_remote_print_script_dest: "{{ scripts_dir }}/ansible_enable-cups-remote.sh"
+    printers:
+      - { name: "OfficeCopier", uri: "ipp://10.100.10.7/ipp/", driver: "everywhere" }
+      - { name: "Library", uri: "socket://10.100.3.22", driver: "postscript-hp:0/ppd/hplip/HP/hp-laserjet_4050_series-ps.ppd" }
+      - { name: "HighSchoolLab", uri: "socket://10.100.11.4", driver: "postscript-hp:0/ppd/hplip/HP/hp-laserjet_4250-ps.ppd" }
+      - { name: "ElementaryLab", uri: "socket://10.100.11.5", driver: "postscript-hp:0/ppd/hplip/HP/hp-laserjet_4350-ps.ppd" }
+  
+  hosts: "{{ host }}"
+  
+  handlers:
+    - name: "Restart cups"
+      ansible.builtin.service:
+        name: "cups"
+        state: "restarted"
+
+    - name: "Restart avahi"
+      ansible.builtin.service:
+        name: "avahi-daemon"
+        state: "restarted"
+  tasks:
+    - name: "Install Avahi, CUPS and Samba"
+      ansible.builtin.package:
+        name: [ "avahi-daemon", "avahi-utils", "cups", "printer-driver-all", "python3-cups", "python3-cupshelpers" ]
+        state: "latest"
+      tags: [ "packages","install" ]
+
+    - tags: [ "install","scripts","deployscripts","runscripts" ]
+      block:
+      - name: "Create scripts dir"
+        ansible.builtin.file:
+          path: "{{ scripts_dir }}"
+          state: "directory"
+
+      - name: "Copy scripts"
+        ansible.builtin.copy:
+          mode: "a+x"
+          dest: "{{ item[0] }}"
+          src: "{{ item[1] }}"
+        loop:
+          - [ "{{ add_printer_script_dest }}", "{{ add_printer_script_src }}" ]
+          - [ "{{ print_sharing_script_dest }}", "{{ print_sharing_script_src }}" ]
+          - [ "{{ allow_remote_print_script_dest }}", "{{ allow_remote_print_script_src }}" ]
+
+    - tags: [ "cups","runscripts","printers" ]
+      block:
+      - name: "Enable CUPS printer sharing"
+        ansible.builtin.shell:
+          cmd: "{{ print_sharing_script_dest }}"
+        register: print_sharing_script_run
+        changed_when: print_sharing_script_run.stdout_lines[-1] is match('Sharing changed to enabled')
+        failed_when: print_sharing_script_run.rc != 0
+        notify: [ "Restart cups","Restart avahi" ]
+
+      - name: "Enable cross-subnet printing in CUPS"
+        ansible.builtin.shell:
+          cmd: "{{ allow_remote_print_script_dest }}"
+        register: remote_access_script_run
+        changed_when: remote_access_script_run.stdout_lines[-1] is match ('Remote printing changed to enabled')
+        failed_when: remote_access_script_run.rc != 0
+        notify: [ "Restart cups","Restart avahi" ]
+
+      - name: "Add printers"
+        ansible.builtin.shell:
+          cmd: "{{ add_printer_script_dest }} \"{{ item.name }}\" \"{{ item.uri }}\" \"{{ item.driver }}\""
+        loop: "{{ printers }}"
+        register: add_printer_script_run
+        changed_when: add_printer_script_run.stdout_lines[-1] is match('Added printer')
+        failed_when: add_printer_script_run.rc != 0
+        notify: [ "Restart cups","Restart avahi" ]

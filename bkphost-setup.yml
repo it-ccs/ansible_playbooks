@@ -1,0 +1,8 @@
+---
+- name: "Backup Host Configuration"
+  vars:
+    host: "bkphost01"
+
+  handlers:
+
+  tasks:

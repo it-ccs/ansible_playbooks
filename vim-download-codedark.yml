@@ -1,0 +1,15 @@
+---
+- name: "Download vim-code-dark source files if they don't exist"
+
+  vars:
+    host: "localhost"
+    ansible_connection: local
+
+  vars_files:
+    - "vars/vim.yaml"
+  
+  hosts: "{{ host }}"
+  gather_facts: no
+
+  tasks:
+    - ansible.builtin.import_tasks: "tasks/vim-download-codedark_tasks.yml"

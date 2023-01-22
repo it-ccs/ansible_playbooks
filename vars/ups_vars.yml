@@ -1,0 +1,13 @@
+---
+apc_options:
+  apc_batterylevel: -1
+  apc_upscable: "ether"
+  apc_device: "{{ nis_server_ip }}:3551"
+  apc_eventsfilemax: 10240
+  apc_minutes: 14
+  apc_netserver: "on"
+  apc_stattime: 60
+  apc_timeout: 900
+  apc_upstype: "net"
+  apc_upsname: "CCSUPS"
+  nis_server_ip: "10.100.13.253"

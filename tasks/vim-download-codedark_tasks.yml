@@ -1,0 +1,28 @@
+- name: "Install git"
+  ansible.builtin.package:
+    name: [ "git" ]
+    state: latest
+
+- name: "Remove existing vim-code-dark directory"
+  ansible.builtin.file:
+    path: "{{codedark_src_path}}"
+    state: "absent"
+
+- name: "Create the directory"
+  ansible.builtin.file:
+    path: "{{codedark_src_path}}"
+    state: directory
+
+- name: "Download vIM Code Dark theme"
+  ansible.builtin.git:
+    clone: yes
+    dest: "{{ codedark_src_path }}"
+    force: yes
+    repo: "https://github.com/tomasiser/vim-code-dark.git"
+    version: "master"
+
+- name: "Remove non-vIM files from the repository downloaded"
+  ansible.builtin.file:
+    path: "{{codedark_src_path}}/{{item}}"
+    state: absent
+  loop: [ "LICENSE.md","README.md",".github",".git" ]

@@ -1,0 +1,21 @@
+---
+- name: "Playbook for testing"
+
+  vars:
+    host: "localhost"
+  
+  hosts: "{{ host }}"
+
+  gather_facts: true
+
+  tasks:
+    
+#    - name: "Run a command"
+#      ansible.builtin.shell:
+#        cmd: "ifconfig"
+#      register: run_command
+    
+    - delegate_to: "localhost"
+      ansible.builtin.copy:
+        dest: "/{{ lookup('env', 'HOME') }}/Documents/hostvars_{{ inventory_hostname }}"
+        content: "{{ hostvars }}"

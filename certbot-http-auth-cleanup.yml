@@ -1,0 +1,16 @@
+---
+- name: "Certbot HTTP Auth cleanup"
+  vars_files:
+    - "vars/certbot_vars.yml"
+
+  vars:
+    host: "rproxy:helpdesk"
+
+  hosts: "{{ host }}"
+
+  tasks:
+    - name: "Create certbot token directory"
+      ansible.builtin.file:
+        mode: 0755
+        path: "{{ certbot_token_path }}"
+        state: "absent"

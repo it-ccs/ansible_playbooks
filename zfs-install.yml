@@ -1,0 +1,10 @@
+---
+- name: "Install ZFS"
+  vars:
+    host: "ccs-bkphost01"
+    auto_reboot: true
+
+  hosts: "{{ host }}"
+
+  roles:
+    - "zfs-install"

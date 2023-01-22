@@ -1,0 +1,98 @@
+---
+- name: "Setup TrueNAS FileServer"
+  vars_files:
+    - "vars/truenas-fileserver_vars.yml"
+
+  vars:
+    host: "truenas"
+
+  vars_prompt:
+    - name: "ad_admin_pwd"
+      prompt: "Password for {{ ad_netbios_domain }}\\{{ ad_admin_user }}"
+      private: true
+
+  hosts: "{{ host }}"
+
+  tasks:
+    - name: "Create scripts directory"
+      tags: [ "all" ]
+      ansible.builtin.file:
+        owner: "root"
+        group: "wheel"
+        mode: 0750
+        path: "{{ remote_scripts_dir }}"
+        state: "directory"
+
+    - name: "Copy scripts"
+      tags: [ "all" ]
+      ansible.builtin.copy:
+        owner: "root"
+        group: "wheel"
+        mode: 0750
+        dest: "{{ remote_scripts_dir }}/{{ item|basename }}"
+        src: "{{ item }}"
+      loop:
+        - "{{ add_truenas_pool_script }}"
+        - "{{ add_truenas_dataset_script }}"
+        - "{{ add_truenas_smb_share_script }}"
+        - "{{ join_truenas_ad_script }}"
+    
+    - name: "Create ZFS pool"
+      tags: [ "pool" ]
+      ansible.builtin.shell:
+        cmd: "{{ remote_scripts_dir }}/{{ add_truenas_pool_script|basename }}"
+      environment:
+        poolName: "{{ zfs_pool.name }}"
+        poolType: "{{ zfs_pool.type }}"
+        poolDisks: "{{ zfs_pool.disks }}"
+      register: pool_create
+      failed_when: pool_create.rc != 0
+      changed_when: (pool_create.stdout_lines or ['empty'])|last is match('Pool has been created')
+
+    - name: "Create ZFS datasets"
+      tags: [ "dataset" ]
+      ansible.builtin.shell:
+        cmd: "{{ remote_scripts_dir }}/{{ add_truenas_dataset_script|basename }}"
+      environment:
+        zDataset: "{{ zfs_pool.name }}/{{ item.name }}"
+      loop: "{{ zfs_datasets }}"
+      register: dataset_create
+      failed_when: dataset_create.rc != 0
+      changed_when: (dataset_create.stdout_lines or ['empty'])|last is match('Created.*dataset')
+    
+    - name: "Join active directory domain"
+      tags: [ "joinad" ]
+      ansible.builtin.shell:
+        cmd: "{{ remote_scripts_dir }}/{{ join_truenas_ad_script|basename }}"
+      environment:
+        adJoinUser: "{{ ad_admin_user }}"
+        adJoinPwd: "{{ ad_admin_pwd }}"
+        adNetBIOSDomain: "{{ ad_netbios_domain }}"
+        adDNSDomain: "{{ ad_dns_domain }}"
+        adServerOU: "{{ join_ad_ou }}"
+      register: ad_join
+      changed_when: (ad_join.stdout_lines or ['empty'])|last is match('Successfully joined ActiveDirectory')
+      failed_when: ad_join.rc != 0
+      when: ad_admin_pwd is match('.+')
+    
+    - name: "Make 'Domain Admins' group the default owner of datasets"
+      ansible.builtin.file:
+        path: "/mnt/{{ zfs_pool.name }}/{{ item.name }}"
+        owner: "CCS\\Domain Admins"
+        state: "directory"
+      loop: "{{ zfs_datasets }}"
+    
+    # - ansible.builtin.import_tasks: "tasks/truenas-fileserver-permissions_tasks.yml"
+    
+    - name: "Create Samba shares"
+      tags: [ "shares" ]
+      ansible.builtin.shell:
+        cmd: "{{ remote_scripts_dir }}/{{ add_truenas_smb_share_script|basename }}"
+      environment:
+        shareName: "{{ item.smb_share }}"
+        sharePath: "/mnt/{{ zfs_pool.name }}/{{ item.name }}"
+      register: share_create
+      changed_when: (share_create.stdout_lines or ['empty'])|last is match('Created the smb share')
+      failed_when: share_create.rc != 0
+      loop: "{{ zfs_datasets }}"
+    

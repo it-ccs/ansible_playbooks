@@ -1,0 +1,13 @@
+- name: "Copy vim-code-dark to vim system dir"
+  ansible.builtin.copy:
+    # must have trailing / in source path, so that contents are copied and not the dir itself
+    src: "{{ codedark_src_path }}/"
+    dest: "{{ vim_files_sys_dir }}/"
+
+- name: "Add configuration to enable theme"
+  ansible.builtin.lineinfile:
+    line: "{{ item }}"
+    path: "{{ vim_sys_rc }}"
+    state: "present"
+  loop:
+    - "colorscheme codedark"

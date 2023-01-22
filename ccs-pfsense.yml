@@ -1,0 +1,135 @@
+---
+- name: "CCS pfSense Setup"
+
+  hosts: "{{ host }}"
+
+  collections:
+    - pfsensible.core
+
+  vars:
+    pf_dns_servers: "8.8.4.4 8.8.8.8"
+    pf_dns_domain: "centennialchristian.ca"
+    pf_hostname: "ccs-pfsense"
+    pf_time_servers: "10.100.3.1"
+    pf_time_zone: "America/Vancouver"
+    int_lan:
+      name: "management"
+      # phys_int: "lagg0"
+      phys_int: "hn2"
+      ip_addr: "10.100.1.253"
+      prefix_len: "24"
+
+  vars_files:
+    - "vars/ccs-pfsense-vars.yml"
+
+  tasks:
+    - name: "Setup DNS and Timezone"
+      pfsensible.core.pfsense_setup:
+        hostname: "{{ pf_hostname }}"
+        domain: "{{ pf_dns_domain }}"
+        dns_addresses: "{{ pf_dns_servers }}"
+        dnsallowoverride: false
+        dnslocalhost: false
+        timeservers: "{{ pf_time_servers }}"
+        timezone: "{{ pf_time_zone }}"
+
+    - name: "MANAGEMENT physical interface setup"
+      pfsensible.core.pfsense_interface:
+        descr: "{{ int_lan.name }}"
+        enable: true
+        interface: "{{ int_lan.phys_int }}"
+        ipv4_address: "{{ int_lan.ip_addr }}"
+        ipv4_prefixlen: "{{ int_lan.prefix_len }}"
+        ipv4_type: "static"
+        state: "present"
+
+    - name: "Create Vlan interfaces"
+      pfsensible.core.pfsense_vlan:
+        interface: "{{ item.phys_int }}"
+        vlan_id: "{{ item.vlan_num }}"
+        descr: "{{ item.name }}"
+        state: "present"
+      loop: "{{ vlan_interfaces }}"
+
+    - name: "Setup Vlan interfaces addresses"
+      pfsensible.core.pfsense_interface:
+        descr: "{{ item.name }}"
+        enable: true
+        interface: "{{ item.phys_int }}.{{ item.vlan_num }}"
+        ipv4_address: "{{ item.ip_addr }}"
+        ipv4_prefixlen: "{{ item.prefix_len }}"
+        ipv4_type: "static"
+        state: "present"
+      loop: "{{ vlan_interfaces }}"
+
+    - name: "Create host aliases"
+      pfsensible.core.pfsense_alias:
+        name: "{{ item.name }}"
+        address: "{{ item.address }}"
+        type: "host"
+        state: "present"
+      loop: "{{ pf_host_aliases }}"
+
+    - name: "Create Network aliases"
+      pfsensible.core.pfsense_alias:
+        name: "{{ item.name }}"
+        address: "{{ item.address }}"
+        type: "network"
+        state: "present"
+      loop: "{{ pf_net_aliases }}"
+
+    - name: "Create URL aliases"
+      pfsensible.core.pfsense_alias:
+        name: "{{ item.name }}"
+        address: "{{ item.address }}"
+        type: "urltable"
+        updatefreq: "{{ item.update_int }}"
+        state: "present"
+      loop: "{{ pf_url_aliases }}"
+
+    - name: "Create port-forward rules"
+      pfsensible.core.pfsense_nat_port_forward:
+        before: "bottom"
+        associated_rule: "associated"
+        interface: "wan"
+
+        descr: "{{ item.descr }}"
+        destination: "{{ item.destination }}"
+        protocol: "{{ item.protocol }}"
+        source: "{{ item.source }}"
+        target: "{{ item.target }}"
+      loop: "{{ pf_port_forward }}"
+
+    - name: "Create firewall rules"
+      pfsensible.core.pfsense_rule:
+        action: "{{ item.action }}"
+        before: "{{ item.before }}"
+        destination: "{{ item.dest }}"
+        destination_port: "{{ item.dst_port }}"
+        source: "{{ item.src }}"
+        direction: "{{ item.direction }}"
+        interface: "{{ item.int }}"
+        name: "{{ item.name }}"
+        ipprotocol: "{{ item.ip_protocol }}"
+        log: "{{ item.log }}"
+        protocol: "{{ item.protocol }}"
+      loop: "{{ pf_rules }}"
+
+    - name: "Gateway via LAN Interface"
+      pfsensible.core.pfsense_gateway:
+        interface: "edu"
+        gateway: "10.100.3.253"
+        ipprotocol: "inet"
+        name: "edu_int"
+
+    - name: "Route to TRUSTED at Erics"
+      pfsensible.core.pfsense_route:
+        descr: "Route 1 to Erics"
+        gateway: "edu_int"
+        network: "10.0.2.0/24"
+
+    - name: "Route 2 to Erics"
+      pfsensible.core.pfsense_route:
+        descr: "Route 2 to Erics"
+        gateway: "edu_int"
+        network: "10.0.1.0/24"

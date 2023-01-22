@@ -1,0 +1,105 @@
+#
+# NOTE: Whenever you modify this file you should run the command
+# "testparm" to check that you have not made any basic syntactic 
+# errors. 
+
+#======================= Global Settings =======================
+
+[global]
+
+# Change this to the workgroup/NT-domain name your Samba server will part of
+workgroup = {{ netbios_domain }}
+realm = {{ dns_domain|upper }}
+kerberos method = secrets and keytab
+dedicated keytab file = {{ krb_keytab_path }}
+
+# This tells Samba to use a separate log file for each machine
+# that connects
+log file = /var/log/samba/log.%m
+
+# Cap the size of the individual log files (in KiB).
+max log size = 1000
+
+# We want Samba to only log to /var/log/samba/log.{smbd,nmbd}.
+# Append syslog@1 if you want important messages to be sent to syslog too.
+logging = file
+
+# Do something sensible when Samba crashes: mail the admin a backtrace
+panic action = /usr/share/samba/panic-action %d
+
+
+# Server role. Defines in which mode Samba will operate. Possible
+# values are "standalone server", "member server", "classic primary
+# domain controller", "classic backup domain controller", "active
+# directory domain controller". 
+server role = member server
+
+obey pam restrictions = yes
+
+# This boolean controls whether PAM will be used for password changes
+# when requested by an SMB client instead of the program listed in
+# 'passwd program'. The default is 'no'.
+   pam password change = yes
+
+# This option controls how unsuccessful authentication attempts are mapped
+# to anonymous connections
+map to guest = bad user
+
+############ Misc ############
+
+# Using the following line enables you to customise your configuration
+# on a per machine basis. The %m gets replaced with the netbios name
+# of the machine that is connecting
+;   include = /home/samba/etc/smb.conf.%m
+
+# Some defaults for winbind (make sure you're not using the ranges
+# for something else.)
+idmap config * :              backend = tdb
+idmap config * :              range   = 10000-99999
+template shell = /bin/bash
+template homdir = /home/%U
+
+winbind user default domain = true
+winbind offline logon = false
+winbind refresh tickets = Yes
+winbind use default domain = yes
+
+
+# Setup usershare options to enable non-root users to share folders
+# with the net usershare command.
+
+# Maximum number of usershare. 0 means that usershare is disabled.
+#   usershare max shares = 100
+
+# Allow users who've been granted usershare privileges to create
+# public shares, not just authenticated ones
+   usershare allow guests = yes
+
+username map = {{ smb_usermap_path }}
+
+#======================= Share Definitions =======================
+
+[printers]
+   comment = All Printers
+   browseable = no
+   path = /var/spool/samba
+   printable = yes
+   guest ok = no
+   read only = yes
+   create mask = 0700
+
+# Windows clients look for this share name as a source of downloadable
+# printer drivers
+[print$]
+   comment = Printer Drivers
+   path = /var/lib/samba/printers
+   browseable = yes
+   read only = yes
+   guest ok = no
+# Uncomment to allow remote administration of Windows print drivers.
+# You may need to replace 'lpadmin' with the name of the group your
+# admin users are members of.
+# Please note that you also need to set appropriate Unix permissions
+# to the drivers directory for these users to have write rights in it
+   write list = root
+

@@ -1,0 +1,63 @@
+ad_admin_user: "admin"
+
+add_truenas_pool_script: "files/scripts/ansible_add-truenas-pool.zsh"
+
+add_truenas_dataset_script: "files/scripts/ansible_add-truenas-dataset.zsh"
+
+add_truenas_smb_share_script: "files/scripts/ansible_add-truenas-smb-share.zsh"
+
+ad_domain_controller_host: "ad"
+
+ad_dns_domain: "ccs.local"
+
+ad_netbios_domain: "CCS"
+
+acl_group_ou: "ou=systemgroups,dc=ccs,dc=local"
+
+get_users_dir_to_user_scripts: "files/scripts/ansible_get-users-dir-to-username.zsh"
+
+join_truenas_ad_script: "files/scripts/ansible_join-truenas-to-ad.zsh"
+
+join_ad_ou: "Member Servers"
+
+nfsv4_acl:
+  - name: "fullcontrol_and_inherit_set"
+    ace: "rwxpDdaARWcCos:fd"
+  - name: "modify_and_inherit_set"
+    ace: "rwxpDdaARWcs:fd"
+  - name: "read_and_inherit_set"
+    ace: "r-x---a-R-c---:fd"
+  - name: "read_and_create_dir_no_inherit_set"
+    ace: "r-xp--a-R-c---:"
+
+remote_scripts_dir: "/scripts"
+
+smb_shares:
+  - { name: "admins$", path: "/mnt/{{ zfs_pool.name }}/admin" }
+  - { name: "deploy$", path: "/mnt/{{ zfs_pool.name }}/deploy" }
+  - { name: "development$", path: "/mnt/{{ zfs_pool.name }}/development" }
+  - { name: "home", path: "/mnt/{{ zfs_pool.name }}/home" }
+  - { name: "office", path: "/mnt/{{ zfs_pool.name }}/office" }
+  - { name: "profiles$", path: "/mnt/{{ zfs_pool.name }}/profiles" }
+  - { name: "teacher$", path: "/mnt/{{ zfs_pool.name }}/teacher" }
+
+zfs_pool:
+  name: "data"
+  type: "STRIPE"
+  disks: "ada1"
+
+zfs_datasets:
+  - name: "admins"
+    smb_share: "admins$"
+  - name: "deploy"
+    smb_share: "deploy$"
+  - name: "development"
+    smb_share: "development$"
+  - name: "home"
+    smb_share: "home"
+  - name: "office"
+    smb_share: "office"
+  - name: "profiles"
+    smb_share: "profiles$"
+  - name: "teacher"
+    smb_share: "teacher$"

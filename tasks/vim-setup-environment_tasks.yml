@@ -1,0 +1,30 @@
+- name: "Install vim"
+  ansible.builtin.package:
+    name: [ "vim", "vim-common", "vim-doc", "vim-runtime" ]
+    state: "latest"
+
+- name: "Create vimfiles plugin directory"
+  ansible.builtin.file:
+    owner: "root"
+    # group: "root"
+    mode: 0775
+    path: "{{ vim_files_sys_dir }}"
+    state: "directory"
+
+- name: "Add configuration to system vimrc"
+  ansible.builtin.lineinfile:
+    create: true
+    line: "{{ item }}"
+    path: "{{ vim_sys_rc }}"
+    state: present
+  loop:
+    - "set mouse="
+    - "set ttymouse="
+    - "syntax on"
+    - "set number!"
+    - "nmap <ESC>[1;5D <C-Left>"
+    - "nmap <ESC>[1;5C <C-Right>"
+    - "cmap <ESC>[1;5D <C-Left>"
+    - "cmap <ESC>[1;5C <C-Right>"
+    - "imap <ESC>[1;5D <C-o><C-Left>"
+    - "imap <ESC>[1;5C <C-o><C-Right>"

@@ -1,0 +1,66 @@
+---
+- name: "Setup print server"
+  vars:
+    host: "printsvr"
+    dns_domain: "ccs.local"
+    domain_controllers: [ "ad.ccs.local", "dc.ccs.local" ]
+    netbios_domain: "CCS"
+    krb_cfg_dest_path: "/etc/krb5.conf"
+    krb_cfg_src_path: "files/cfg/ad_join.krb5.conf.j2"
+    krb_keytab_path: "/etc/krb5.keytab"
+    smb_cfg_dest_path: "/etc/samba/smb.conf"
+    smb_cfg_src_path: "files/cfg/printsvr.smb.conf.j2"
+    smb_usermap_path: "/etc/samba/user.map"
+    timesync_cfg_path: "/etc/systemd/systemd-timesyncd.conf"
+  
+  hosts: "{{ host }}"
+  
+  tasks:
+    - tags: [ "packages" ]
+      block:
+      - name: "Install CUPS, Samba ,Winbind and Kerberos"
+        ansible.builtin.package:
+          name: [ "cups", "krb5-sync-plugin", "krb5-sync-tools", "krb5-user", "krb5-config", "libpam-krb5", "libpam-winbind", "libnss-winbind", "realmd", "samba","samba-dsdb-modules", "samba-vfs-modules", "winbind" ]
+          state: "latest"
+
+    - tags: [ "timesync" ]
+      block:
+      - name: "Configure domain controllers as time servers for timesyncd"
+        community.general.ini_file:
+          option: "NTP"
+          path: "{{ timesync_cfg_path }}"
+          section: "Time"
+          value: "{{ domain_controllers|join(' ') }}"
+          
+      - name: "Restart the timesyncd service"
+        ansible.builtin.service:
+          enabled: yes
+          name: "systemd-timesyncd"
+          state: "restarted"
+      
+    - tags: [ "kerberos", "samba", "smb" ]
+      block:
+      - name: "Configure kerberos using krb5.conf template"
+        ansible.builtin.template:
+          backup: yes
+          dest: "{{ krb_cfg_dest_path }}"
+          src: "{{ krb_cfg_src_path }}"
+      
+    - tags: [ "samba","smb" ]
+      block:
+      - name: "Configure samba using smb.conf template"
+        ansible.builtin.template:
+          backup: yes
+          dest: "{{ smb_cfg_dest_path }}"
+          src: "{{ smb_cfg_src_path }}"
+
+      - name: "Add Admin user to root mapping"
+        ansible.builtin.lineinfile:
+          create: yes
+          owner: "root"
+          group: "root"
+          mode: 0640
+          line: "!root = {{ netbios_domain|upper }}\\admin admin"
+          path: "{{ smb_usermap_path }}"
+          state: "present"
+

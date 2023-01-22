@@ -1,0 +1,134 @@
+---
+- name: "Install and setup SSH and PowershellCore"
+  vars:
+    # ansible_connection: "winrm"
+    # ansible_winrm_transport: "{{ ansible_winrm_transport|default('credssp') }}"
+    # ansible_winrm_scheme: "{{ ansible_winrm_scheme|default('http') }}"
+    # ansible_winrm_port: "{{ ansible_winrm_port|default(5985) }}"
+    # ansible_port: "{{ ansible_port|default(5985) }}"
+    ansible_connection: "winrm"
+    ansible_winrm_transport: "credssp"
+    ansible_winrm_scheme: "http"
+    ansible_winrm_port: 5985
+    ansible_port: 5985
+    osd_dir: "{{ansible_facts.env.SystemDrive}}\\OSD"
+    pwsh_version_num: 7.2.1
+    pwsh_installer_name: "PowerShell-{{ pwsh_version_num }}-win-x64.msi"
+    pwsh_installer_src: "{{ playbook_dir }}/files/programs/{{ pwsh_installer_name }}"
+    pwsh_installer_dest: "{{ osd_dir }}\\installers\\{{ pwsh_installer_name }}"
+    pwsh_product_id: "{11E117C7-01D0-4C4E-9096-2E90843A173E}"
+    pwsh_installer_log: "{{ osd_dir }}\\AppLogs\\{{ pwsh_installer_name|regex_replace('\\.[^\\.]+$','.log') }}"
+    pwsh_pathvar_backup_path: "{{ pwsh_installer_log|win_dirname }}\\powershell-{{pwsh_version_num}}-backup-pathvar.txt"
+    pwsh_major_ver: "{{ pwsh_version_num.split('.')[0] }}"
+  
+  hosts: "{{ host }}"
+  
+  gather_facts: yes
+  
+  tasks:
+    - name: "Create {{ pwsh_installer_log|win_dirname }} directory"
+      ansible.windows.win_file:
+        path: "{{ pwsh_installer_log|win_dirname }}"
+        state: "directory"
+      register: create_osd_dir
+    
+    - name: "Create {{ pwsh_installer_dest|win_dirname }} directory"
+      ansible.windows.win_file:
+        path: "{{ pwsh_installer_dest|win_dirname }}"
+        state: directory
+    
+    - name: "Grant administrator permissions to the OSD folder"
+      ansible.windows.win_acl:
+        path: "{{ osd_dir }}"
+        rights: "FullControl"
+        inherit: "ContainerInherit,ObjectInherit"
+        propagation: "InheritOnly"
+        state: "present"
+        type: "allow"
+        user: "{{ item }}"
+      loop:
+        - "BUILTIN\\Administrators"
+        - "NT AUTHORITY\\SYSTEM"
+      
+    # - name: "Grant domain groups permissions to OSD folder"
+    #   ansible.windows.win_acl:
+    #     path: "{{ osd_dir }}"
+    #     rights: "FullControl"
+    #     inherit: "ContainerInherit,ObjectInherit"
+    #     propagation: "InheritOnly"
+    #     state: "present"
+    #     type: "allow"
+    #     user: "{{ item }}"
+    #   loop:
+    #     - "{{ ansible_facts.env.USERDOMAIN }}\\Domain Admins"
+    #   when: ansible_windows_domain_member|default(false)
+
+    - name: "Remove inheritence on the OSD folder"
+      ansible.windows.win_acl_inheritance:
+        path: "{{ osd_dir }}"
+        reorganize: "no"
+        state: absent
+
+    - name: "Copy powershell core package"
+      ansible.windows.win_copy:
+        dest: "{{ pwsh_installer_dest }}"
+        src: "{{ pwsh_installer_src }}"
+
+    - name: "Install powershell core"
+      ansible.windows.win_package:
+        arguments:
+          - "ADD_EXPLORER_CONTEXT_MENU_OPENPOWERSHELL=1"
+          - "ADD_FILE_CONTEXT_MENU_RUNPOWERSHELL=1"
+          - "ENABLE_PSREMOTING=1"
+          - "REGISTER_MANIFEST=1"
+          - "USE_MU=1"
+          - "ENABLE_MU=1"
+        chdir: "{{ pwsh_installer_dest|win_dirname }}"
+        log_path: "{{ pwsh_installer_log }}"
+        path: "{{ pwsh_installer_dest }}"
+        product_id: "{{ pwsh_product_id }}"
+        provider: "msi"
+        state: "present"
+      become: true
+      become_user: "SYSTEM"
+      become_method: "runas"
+    
+    - name: "Get powershell core exe path"
+      ansible.windows.win_powershell:
+        arguments: [ "-ExecutionPolicy","UnRestricted","-NonInteractive","-NoLogo" ]
+        error_action: "stop"
+        script: |
+          $pwshlinkPath = (Get-ChildItem -Path "$env:SystemDrive\ProgramData\Microsoft\Windows\Start Menu\Programs" -Filter Powershell*{{ pwsh_major_ver }}*.lnk -Recurse | Sort-Object -Property LastWriteTime -Descending | Select-Object -First 1).FullName;
+          $pwshExeLong = (New-Object -ComObject WScript.Shell).CreateShortcut($pwshlinkPath).TargetPath;
+          $pwshExeLong;
+      register: pwsh_get_exe_path
+      changed_when: false
+    
+    - debug:
+        var: pwsh_get_exe_path
+
+    - set_fact:
+        pwsh_exe_path: "{{ pwsh_get_exe_path.output|last }}"
+      failed_when: pwsh_get_exe_path.output|length < 1
+
+    - name: "Add powershell core to path"
+      ansible.windows.win_powershell:
+        arguments: [ "-ExecutionPolicy","UnRestricted","-NonInteractive","-NoLogo" ]
+        error_action: "stop"
+        script: |
+          $pwshDir = "{{ pwsh_exe_path|win_dirname }}"
+          $pwshDirRegexSafe = [Regex]::Escape($pwshDir);
+          $syspathvar = (Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment' -Name Path).Path;
+          if ( $syspathvar -notmatch "^$pwshDirRegexSafe(\\|);" -and $syspathvar -notmatch ";$pwshDirRegexSafe(\\|);" -and $syspathvar -notmatch ";$pwshDirRegexSafe(\\|)`$" ) {
+            $syspathvar | Out-File -FilePath "{{ pwsh_pathvar_backup_path }}"
+            $pathArray = @();
+            $pathArray += $syspathvar -split ';';
+            $pathArray += "$pwshDir";
+            $newPathString = "$($pathArray -join ';')"
+            Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment' -Name Path -Value $newPathString;
+            Write-Output "Added pwsh to PATH";
+          } else {
+            Write-Output "pwsh already in PATH";
+          }
+      register: add_pwsh_to_path
+      changed_when: (['none'] + add_pwsh_to_path.output)|last is match('Added pwsh')
